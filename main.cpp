@@ -1,16 +1,44 @@
+#pragma once
+#include <iostream>
+#include <map>
+#include <vector>
 #include <limits>
+
+using namespace std;
+
 #include "model.h"
 #include "our_gl.h"
 
-constexpr int width  = 800; // output image size
-constexpr int height = 800;
-constexpr vec3 light_dir{1,1,1}; // light source
-constexpr vec3       eye{1,1,3}; // camera position
-constexpr vec3    center{0,0,0}; // camera direction
-constexpr vec3        up{0,1,0}; // camera up vector
 
-extern mat<4,4> ModelView; // "OpenGL" state matrices
-extern mat<4,4> Projection;
+/* * * *  GLOBAL FUNCTION DEFINE  * * * */
+
+map<string, vector<string>> Getopt(const int argc, char* const argv[]);
+bool IsLetter(const string& str);
+bool IsNumber(const string& str);
+int TryStoi(const string& str);
+double TryStod(const string& str);
+void PrintCmds(const map<string, vector<string>>& Cmds);
+bool InitGlobalParam(map<string, vector<string>>& Cmds);
+void PrintGlobal();
+void ShowMenu();
+bool CreateTgaFiles(std::string filename);
+
+
+/* * * *  GLOBAL DATA STRUCTURE  * * * */
+
+static string obj = "";     // tinyrender obj file
+
+static int width;       // output image size
+static int height;
+static vec3 light_dir;  // light source
+static vec3 eye;        // camera position
+static vec3 center;     // camera direction
+static vec3 up;         // camera up vector
+
+extern mat<4, 4> ModelView; // "OpenGL" state matrices
+extern mat<4, 4> Projection;
+
+static vector<uint8_t> new_bgra(4, 0);
 
 struct Shader : IShader {
     const Model &model;
@@ -55,12 +83,25 @@ struct Shader : IShader {
     }
 };
 
-int main(int argc, char** argv) {
-    if (2>argc) {
-        std::cerr << "Usage: " << argv[0] << " obj/model.obj" << std::endl;
-        return 1;
+
+/* * * *  MAIN FUNCTION  * * * */
+
+int main(int argc, char** argv)
+{
+    map<std::string, vector<std::string>> Cmds = Getopt(argc, argv);
+
+    PrintCmds(Cmds);
+
+    if (!InitGlobalParam(Cmds))
+    {
+        cout << "The program is missing a required parameter." << endl << endl;
+        ShowMenu();
+        return -1;
     }
-    TGAImage framebuffer(width, height, TGAImage::RGB); // the output image
+
+    CreateTgaFiles(obj);
+
+    TGAImage framebuffer(width, height, TGAImage::RGB, new_bgra); // the output image
     lookat(eye, center, up);                            // build the ModelView matrix
     viewport(width/8, height/8, width*3/4, height*3/4); // build the Viewport matrix
     projection((eye-center).norm());                    // build the Projection matrix
@@ -80,3 +121,289 @@ int main(int argc, char** argv) {
     return 0;
 }
 
+
+/* * * *  GLOBAL FUNCTION IMPLEMENT  * * * */
+
+map<string, vector<string>> Getopt(const int argc, char* const argv[])
+{
+    map<string, vector<string>> retCmdValueMap;
+    string cur = "";
+    int ops = 1;
+
+    while (ops < argc)
+    {
+        string str = argv[ops++];
+        if ("" != str)
+        {
+            if ('-' == str[0])
+            {
+                if (1 < str.length())
+                {
+                    string subStr = str.substr(1);
+                    if (IsLetter(subStr))
+                    {
+                        retCmdValueMap.insert({ subStr, {} });
+                        cur = subStr;
+                    }
+                    else
+                    {
+                        if ("" != cur && IsNumber(str))
+                        {
+                            retCmdValueMap[cur].push_back(str);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if ("" != cur)
+                {
+                    retCmdValueMap[cur].push_back(str);
+                }
+            }
+        }
+    }
+    return retCmdValueMap;
+}
+
+bool IsLetter(const string& str)
+{
+    bool flag = true;
+    for (auto ch : str)
+    {
+        if (('A' <= ch && ch <= 'Z') || ('a' <= ch && ch <= 'z') || ('.' == ch) || ('_' == ch))
+        {
+            flag = true;
+        }
+        else
+        {
+            flag = false;
+            break;
+        }
+    }
+    return flag;
+}
+
+bool IsNumber(const string& str)
+{
+    bool flag = true;
+    for (auto ch : str)
+    {
+        if (('0' <= ch && ch <= '9') || ('-' == ch))
+        {
+            flag = true;
+        }
+        else
+        {
+            flag = false;
+            break;
+        }
+    }
+    return flag;
+}
+
+int TryStoi(const string& str)
+{
+    try
+    {
+        return stoi(str);
+    }
+    catch (const std::exception&)
+    {
+        return 0;
+    }
+}
+
+double TryStod(const string& str)
+{
+    try
+    {
+        return stod(str);
+    }
+    catch (const std::exception&)
+    {
+        return 0.0;
+    }
+}
+
+void PrintCmds(const map<string, vector<string>>& Cmds)
+{
+    for (auto val : Cmds)
+    {
+        cout << "Cmds[ " << val.first << " ] = [ ";
+        for (auto val2 : val.second)
+        {
+            cout << val2 << " ";
+        }
+        cout << "]" << endl;
+    }
+}
+
+bool InitGlobalParam(map<string, vector<string>>& Cmds)
+{
+    vector<bool> flags(8, false);
+
+    if (Cmds.end() != Cmds.find("obj"))
+    {
+        if (1 == Cmds["obj"].size())
+        {
+            obj = Cmds["obj"][0];
+            flags[0] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("width"))
+    {
+        if (1 == Cmds["width"].size())
+        {
+            width = TryStoi(Cmds["width"][0]);
+            flags[1] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("height"))
+    {
+        if (1 == Cmds["height"].size())
+        {
+            height = TryStoi(Cmds["height"][0]);
+            flags[2] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("light_dir"))
+    {
+        if (3 == Cmds["light_dir"].size())
+        {
+            light_dir[0] = TryStod(Cmds["light_dir"][0]);
+            light_dir[1] = TryStod(Cmds["light_dir"][1]);
+            light_dir[2] = TryStod(Cmds["light_dir"][2]);
+            flags[3] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("eye"))
+    {
+        if (3 == Cmds["eye"].size())
+        {
+            eye[0] = TryStod(Cmds["eye"][0]);
+            eye[1] = TryStod(Cmds["eye"][1]);
+            eye[2] = TryStod(Cmds["eye"][2]);
+            flags[4] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("center"))
+    {
+        if (3 == Cmds["center"].size())
+        {
+            center[0] = TryStod(Cmds["center"][0]);
+            center[1] = TryStod(Cmds["center"][1]);
+            center[2] = TryStod(Cmds["center"][2]);
+            flags[5] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("up"))
+    {
+        if (3 == Cmds["up"].size())
+        {
+            up[0] = TryStod(Cmds["up"][0]);
+            up[1] = TryStod(Cmds["up"][1]);
+            up[2] = TryStod(Cmds["up"][2]);
+            flags[6] = true;
+        }
+    }
+
+    if (Cmds.end() != Cmds.find("new_bgra"))
+    {
+        if (4 == Cmds["new_bgra"].size())
+        {
+            new_bgra[0] = TryStod(Cmds["new_bgra"][0]);
+            new_bgra[1] = TryStod(Cmds["new_bgra"][1]);
+            new_bgra[2] = TryStod(Cmds["new_bgra"][2]);
+            new_bgra[3] = TryStod(Cmds["new_bgra"][3]);
+            flags[7] = true;
+        }
+    }
+
+    return flags[0] && flags[1] && flags[2] && flags[3] && flags[4] && flags[5] && flags[6] && flags[7];
+}
+
+void PrintGlobal()
+{
+    cout << "obj = " << obj << endl;
+    cout << "width = " << width << endl;
+    cout << "height = " << height << endl;
+
+    cout << "light_dir =";
+    for (int i = 0; i < 3; ++i)
+    {
+        cout << " " << light_dir[i];
+    }
+    cout << endl;
+
+    cout << "eye =";
+    for (int i = 0; i < 3; ++i)
+    {
+        cout << " " << eye[i];
+    }
+    cout << endl;
+
+    cout << "center =";
+    for (int i = 0; i < 3; ++i)
+    {
+        cout << " " << center[i];
+    }
+    cout << endl;
+
+    cout << "up =";
+    for (int i = 0; i < 3; ++i)
+    {
+        cout << " " << up[i];
+    }
+    cout << endl;
+}
+
+void ShowMenu()
+{
+    std::cout << "Input the params :" << std::endl;
+    std::cout << "\t" << "-obj " << 1 << std::endl;
+    std::cout << "\t" << "-width " << 1 << std::endl;
+    std::cout << "\t" << "-height " << 1 << std::endl;
+    std::cout << "\t" << "-light_dir " << 3 << std::endl;
+    std::cout << "\t" << "-eye " << 3 << std::endl;
+    std::cout << "\t" << "-center " << 3 << std::endl;
+    std::cout << "\t" << "-up " << 3 << std::endl;
+    std::cout << "\t" << "-new_bgra " << 4 << std::endl << endl;
+}
+
+bool CreateTgaFiles(std::string filename)
+{
+    std::string obj_diffuse = "_diffuse.tga";
+    std::string obj_nm_tangent = "_nm_tangent.tga";
+    std::string obj_spece = "_spec.tga";
+    ofstream out1, out2, out3;
+
+    size_t dot = obj.find_last_of(".");
+    std::string fileNameNoSuffix = obj.substr(0, dot);
+    if (dot == std::string::npos)
+        return -1;
+
+    // make obj_diffuse.tga
+    obj_diffuse = obj.substr(0, dot) + obj_diffuse;
+    out1.open(obj_diffuse, 'r');
+    out1.clear();
+    out1.close();
+
+    // make obj_nm_tangent.tga
+    obj_nm_tangent = obj.substr(0, dot) + obj_nm_tangent;
+    out2.open(obj_nm_tangent, 'r');
+    out2.clear();
+    out2.close();
+
+    // make obj_spece.tga
+    obj_spece = obj.substr(0, dot) + obj_spece;
+    out3.open(obj_spece, 'r');
+    out3.clear();
+    out3.close();
+}

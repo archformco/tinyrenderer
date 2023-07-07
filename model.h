@@ -14,6 +14,8 @@ class Model {
     TGAImage normalmap{};          // normal map texture
     TGAImage specularmap{};        // specular map texture
     void load_texture(const std::string filename, const std::string suffix, TGAImage &img);
+    void load_texture1(const std::string filename, const std::string suffix, TGAImage& img);
+
 public:
     Model(const std::string filename);
     int nverts() const;

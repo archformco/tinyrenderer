@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <sstream>
 #include "model.h"
@@ -30,11 +31,25 @@ Model::Model(const std::string filename) {
             int f,t,n;
             iss >> trash;
             int cnt = 0;
-            while (iss >> f >> trash >> t >> trash >> n) {
-                facet_vrt.push_back(--f);
-                facet_tex.push_back(--t);
-                facet_nrm.push_back(--n);
-                cnt++;
+
+            if (std::string::npos != line.find("//"))
+            {
+                while (iss >> f >> trash >> trash >> n)
+                {
+                    facet_vrt.push_back(--f);
+                    facet_tex.push_back(1);
+                    facet_nrm.push_back(--n);
+                    cnt++;
+                }
+            }
+            else
+            {
+                while (iss >> f >> trash >> t >> trash >> n) {
+                    facet_vrt.push_back(--f);
+                    facet_tex.push_back(--t);
+                    facet_nrm.push_back(--n);
+                    cnt++;
+                }
             }
             if (3!=cnt) {
                 std::cerr << "Error: the obj file is supposed to be triangulated" << std::endl;
@@ -42,8 +57,18 @@ Model::Model(const std::string filename) {
             }
         }
     }
-    std::cerr << "# v# " << nverts() << " f# "  << nfaces() << " vt# " << tex_coord.size() << " vn# " << norms.size() << std::endl;
-    load_texture(filename, "_diffuse.tga",    diffusemap );
+
+    int count = 10000;
+    while (count--)
+    {
+        vec2 uv{ 0,0 };
+        tex_coord.push_back({ uv.x, 1 - uv.y });
+    }
+
+    std::cerr << "# v# " << nverts() << " f# " << nfaces() << " vt# " << tex_coord.size() << " vn# " << norms.size() << std::endl;
+    // load_texture(filename, "_diffuse.tga",    diffusemap );
+    load_texture1(filename, "_diffuse.tga",   diffusemap);
+
     load_texture(filename, "_nm_tangent.tga", normalmap  );
     load_texture(filename, "_spec.tga",       specularmap);
 }
@@ -69,6 +94,13 @@ void Model::load_texture(std::string filename, const std::string suffix, TGAImag
     if (dot==std::string::npos) return;
     std::string texfile = filename.substr(0,dot) + suffix;
     std::cerr << "texture file " << texfile << " loading " << (img.read_tga_file(texfile.c_str()) ? "ok" : "failed") << std::endl;
+}
+
+void Model::load_texture1(std::string filename, const std::string suffix, TGAImage &img) {
+    size_t dot = filename.find_last_of(".");
+    if (dot==std::string::npos) return;
+    std::string texfile = filename.substr(0, dot) + suffix;
+    std::cerr << "texture file " << texfile << " loading " << (img.read_tga_file1(texfile.c_str()) ? "ok" : "failed") << std::endl;
 }
 
 vec3 Model::normal(const vec2 &uvf) const {
